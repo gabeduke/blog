@@ -1,6 +1,7 @@
 baseURL = "https://gabeduke.github.io/blog/"
 languageCode = "en-us"
 title = "Adventures in over-engineering"
+canonifyURLs = true
 
 
 [params]

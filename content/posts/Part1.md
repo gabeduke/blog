@@ -212,7 +212,7 @@ http://localhost:9091
 
 Notice there is a new group for `sanity-test` and the data point `sample_metric` is equal to 1.
 
-![](/static/pushgateway.png)
+![](/pushgateway.png)
 
 To see the raw metrics that prometheus will scrape, navigate to http://localhost:9091/metrics and notice the new line:
 
@@ -227,7 +227,7 @@ http://localhost:9090
 
 Prometheus is where the data will be aggregated and we can perform queries over time. Since we only have a single data point we will see a line in the graph when searching for `sample_metric`. As we build out the monitoring system we can add CRDs to generate alerts on our data.
 
-![](/static/prometheus.png)
+![](/prometheus.png)
 
 ### Visualize in Grafana
 
@@ -239,7 +239,7 @@ Log in with the username `admin` and password will be `${PASSWORD}`. Again the v
 
 To validate our sample metric we are going to use the _Explore_ function. Navigate to http://localhost:8080/explore
 
-![](/static/grafana_explore.png)
+![](/grafana_explore.png)
 
 ## Wrapping up
 
