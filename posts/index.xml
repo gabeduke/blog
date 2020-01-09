@@ -238,20 +238,20 @@ kubectl port-forward svc/metrics-sink-prometheus-pushgateway -n <span style="col
 </code></pre></div><h3 id="visualize-in-pushgateway">Visualize in PushGateway</h3>
 <p>http://localhost:9091</p>
 <p>Notice there is a new group for <code>sanity-test</code> and the data point <code>sample_metric</code> is equal to 1.</p>
-<p><img src="/pushgateway.png" alt=""></p>
+<p><img src="/static/pushgateway.png" alt=""></p>
 <p>To see the raw metrics that prometheus will scrape, navigate to http://localhost:9091/metrics and notice the new line:</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#75715e"># TYPE sample_metric untyped</span>
 sample_metric<span style="color:#f92672">{</span>instance<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;&#34;</span>,job<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;sanity-test&#34;</span><span style="color:#f92672">}</span> <span style="color:#ae81ff">1</span>
 </code></pre></div><h3 id="visualize-in-prometheus">Visualize in Prometheus</h3>
 <p>http://localhost:9090</p>
 <p>Prometheus is where the data will be aggregated and we can perform queries over time. Since we only have a single data point we will see a line in the graph when searching for <code>sample_metric</code>. As we build out the monitoring system we can add CRDs to generate alerts on our data.</p>
-<p><img src="/prometheus.png" alt=""></p>
+<p><img src="/static/prometheus.png" alt=""></p>
 <h3 id="visualize-in-grafana">Visualize in Grafana</h3>
 <p>Grafana is where we will compile dashboards to display Prometheus queries.</p>
 <p>To get the password from the next step: <code>kubectl get secret --namespace default grafana -o jsonpath=&quot;{.data.admin-password}&quot; | base64 --decode ; echo</code></p>
 <p>Log in with the username <code>admin</code> and password will be <code>${PASSWORD}</code>. Again the visualization is not very interesting with a single data point but this is a simple sanity test.</p>
 <p>To validate our sample metric we are going to use the <em>Explore</em> function. Navigate to http://localhost:8080/explore</p>
-<p><img src="/grafana_explore.png" alt=""></p>
+<p><img src="/static/grafana_explore.png" alt=""></p>
 <h2 id="wrapping-up">Wrapping up</h2>
 <p>Congradulations! You now have the foundation for a batch metrics monitoring system! Keep an eye out for the next post where I will walk thorugh connecting real sensor data.</p>
 ]]></content></item></channel></rss>
