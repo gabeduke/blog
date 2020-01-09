@@ -26,7 +26,7 @@ jobs:
     - name: Build
       run: |
         hugo --gc --minify --cleanDestinationDir -t hello-friend-ng
-        touch ./docs/public/.nojekyll
+        touch ./public/.nojekyll
 
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v2.4.0
