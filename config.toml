@@ -1,7 +1,7 @@
-baseURL = "https://gabeduke.github.io/blog/"
+baseURL = "https://gabeduke.github.io/blog"
 languageCode = "en-us"
 title = "Adventures in over-engineering"
-canonifyURLs = true
+canonifyurls = true
 
 
 [params]
@@ -19,7 +19,7 @@ canonifyURLs = true
   images = [""]
 
   # Directory name of your blog content (default is `content/posts`)
-  contentTypeName = "posts"
+  contentTypeName = "/posts/"
 
   # Default theme "light" or "dark"
   defaultTheme = "dark"
@@ -34,7 +34,7 @@ canonifyURLs = true
 
     [languages.en.params.logo]
       logoText = "fn create site"
-      logoHomeLink = "/blog"
+      logoHomeLink = "/"
     # or
     #
     # path = "/img/your-example-logo.svg"
@@ -44,9 +44,9 @@ canonifyURLs = true
   [[menu.main]]
     identifier = "posts"
     name       = "Posts"
-    url        = "/posts"
+    url        = "posts/"
 
   [[menu.main]]
     identifier = "about"
     name       = "About"
-    url        = "/about"
+    url        = "about/"
