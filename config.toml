@@ -3,7 +3,6 @@ languageCode = "en-us"
 title = "Adventures in over-engineering"
 canonifyurls = true
 
-
 [params]
   dateform        = "Jan 2, 2006"
   dateformShort   = "Jan 2"
@@ -15,7 +14,7 @@ canonifyurls = true
 
   # Metadata mostly used in document's head
   description = "Adventures in over-engineering"
-  keywords = "iot, civo, openfaas"
+  keywords = "iot, kubernetes, linux"
   images = [""]
 
   # Directory name of your blog content (default is `content/posts`)
@@ -33,7 +32,7 @@ canonifyurls = true
     readOtherPosts = "Read other posts"
 
     [languages.en.params.logo]
-      logoText = "fn create site"
+      logoText = "cd $HOME"
       logoHomeLink = "/"
     # or
     #

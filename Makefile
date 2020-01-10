@@ -9,7 +9,7 @@ build:													## Build Static site
 	@hugo --gc --minify --cleanDestinationDir -t hello-friend-ng
 
 serve:													## Serve Static site
-	@hugo server -t hello-friend-ng
+	@hugo server -t hello-friend-ng -F -D
 
 ##########################################################
 ##@ UTIL
