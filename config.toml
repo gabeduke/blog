@@ -3,6 +3,16 @@ languageCode = "en-us"
 title = "Adventures in over-engineering"
 canonifyurls = true
 
+[permalinks]
+  posts = "/posts/:year/:month/:title/"
+
+[author]
+  name = "Gabriel Duke"
+
+[taxonomies]
+  tag      = "tags"
+  category = "categories"
+
 [params]
   dateform        = "Jan 2, 2006"
   dateformShort   = "Jan 2"
@@ -17,11 +27,34 @@ canonifyurls = true
   keywords = "iot, kubernetes, linux"
   images = [""]
 
+  homeSubtitle = "Exploration of Linux, Kubernetes, and all things Computronics"
+
   # Directory name of your blog content (default is `content/posts`)
   contentTypeName = "/posts/"
 
   # Default theme "light" or "dark"
   defaultTheme = "dark"
+  # Social icons
+
+  [[params.social]]
+    name = "twitter"
+    url  = "https://twitter.com/sudoDuke"
+
+  [[params.social]]
+    name = "email"
+    url  = "mailto:gabeduke@gmail.com"
+
+  [[params.social]]
+    name = "github"
+    url  = "https://github.com/gabeduke"
+
+  [[params.social]]
+    name = "linkedin"
+    url  = "https://www.linkedin.com/in/gabriel-duke-76ba7b85/"
+
+  # [[params.social]]
+  #   name = "stackoverflow"
+  #   url  = "https://www.stackoverflow.com/"
 
 [languages]
   [languages.en]
@@ -32,6 +65,7 @@ canonifyurls = true
     readOtherPosts = "Read other posts"
 
     [languages.en.params.logo]
+      # logoText = "cd /home/"
       logoText = "cd $HOME"
       logoHomeLink = "/"
     # or
