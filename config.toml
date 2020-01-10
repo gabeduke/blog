@@ -1,4 +1,4 @@
-baseURL = "https://gabeduke.github.io/blog"
+baseURL = "https://gabeduke.github.io/weblog"
 languageCode = "en-us"
 title = "Adventures in over-engineering"
 canonifyurls = true
