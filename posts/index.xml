@@ -1,4 +1,132 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Weblog on Adventures in over-engineering</title><link>https://gabeduke.github.io/weblog/posts/</link><description>Recent content in Weblog on Adventures in over-engineering</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Tue, 19 Nov 2019 09:30:04 -0500</lastBuildDate><atom:link href="https://gabeduke.github.io/weblog/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>IOT Fleet Metrics (Part1)</title><link>https://gabeduke.github.io/weblog/posts/2019/11/iot-fleet-metrics-part1/</link><pubDate>Tue, 19 Nov 2019 09:30:04 -0500</pubDate><guid>https://gabeduke.github.io/weblog/posts/2019/11/iot-fleet-metrics-part1/</guid><description>TL/DR This guide documents a simple Prometheus PushGateway setup on top of Civo's k3s offering. We will then push some data to the gateway and visualize it in Grafana.
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Weblog on Adventures in over-engineering</title><link>https://gabeduke.github.io/weblog/posts/</link><description>Recent content in Weblog on Adventures in over-engineering</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Thu, 09 Jan 2020 09:30:08 -0500</lastBuildDate><atom:link href="https://gabeduke.github.io/weblog/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>Kafka in Civo kubernetes</title><link>https://gabeduke.github.io/weblog/posts/2020/01/kafka-in-civo-kubernetes/</link><pubDate>Thu, 09 Jan 2020 09:30:08 -0500</pubDate><guid>https://gabeduke.github.io/weblog/posts/2020/01/kafka-in-civo-kubernetes/</guid><description>This example deploys a Kafka cluster using Banzai Cloud Kafka Operator. This guide is a condensed version of the official Banzai documentation, the idea is to quickly get up and running and explore their offering.
+Setup Prerequisites:
+Civo CLI and access to the Beta program (Not strictly necessary but it is FAST) Helm3 Kubectl Provision Kubernetes Any kubernetes cluster will do but for this tutorial I'll use Civo Cloud's offering.</description><content type="html"><![CDATA[<p>This example deploys a Kafka cluster using <a href="https://github.com/banzaicloud/kafka-operator">Banzai Cloud Kafka Operator</a>. This guide is a condensed version of the official Banzai documentation, the idea is to quickly get up and running and explore their offering.</p>
+<h2 id="setup">Setup</h2>
+<p><em>Prerequisites</em>:</p>
+<ul>
+<li>Civo CLI and access to the Beta program (Not strictly necessary but it is <em>FAST</em>)</li>
+<li>Helm3</li>
+<li>Kubectl</li>
+</ul>
+<h3 id="provision-kubernetes">Provision Kubernetes</h3>
+<p>Any kubernetes cluster will do but for this tutorial I'll use <a href="https://www.civo.com/">Civo Cloud's</a> offering.</p>
+<p><em>Civo</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">civo k8s create <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --nodes <span style="color:#ae81ff">3</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --save --switch --wait <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  kafka
+</code></pre></div><h3 id="provision-dependencies">Provision Dependencies</h3>
+<p>Let's get the core dependencies provisioned. We'll need:</p>
+<ul>
+<li><strong>Cert Manager</strong>: cert manager off loads the heavy lifting for certificate generation and rotation. There are many configurations that can be enabled, just check out the Banzai documentation for more information.</li>
+<li><strong>Prometheus Operator</strong>: We only need the core bundle which will enable the use of <a href="https://github.com/coreos/prometheus-operator/blob/master/Documentation/user-guides/getting-started.md#related-resources">service monitors</a> and alerts. This is one of the key enablers that allows Banzai kafka clusters to recover and rebalance data.</li>
+<li><strong>Zookeeper</strong>: You can use any zookeeper endpoint but Banzai has packaged an operator for use. Zookeeper is the key value database which stores the kafka state.</li>
+</ul>
+<p>We'll also need the <em>Banzai Helm Repo</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">helm repo add banzaicloud-stable https://kubernetes-charts.banzaicloud.com/
+</code></pre></div><p><em>Cert-Manager</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># create cert-manager deployment</span>
+kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml
+</code></pre></div><p><em>Prometheus Operator</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># create the prometheus operator</span>
+kubectl apply -n default -f https://raw.githubusercontent.com/coreos/prometheus-operator/master/bundle.yaml
+</code></pre></div><p><em>Zookeeper Operator</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># create zookeeper namespace</span>
+kubectl create namespace zookeeper
+
+<span style="color:#75715e"># create zk operator</span>
+helm upgrade --install <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --namespace zookeeper <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --wait <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  zookeeper-operator banzaicloud-stable/zookeeper-operator
+</code></pre></div><p><em>Zookeeper</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># create zookeeper cluster</span>
+cat <span style="color:#e6db74">&lt;&lt;EOF | kubectl apply --namespace zookeeper -f -
+</span><span style="color:#e6db74">
+</span><span style="color:#e6db74">apiVersion: zookeeper.pravega.io/v1beta1
+</span><span style="color:#e6db74">kind: ZookeeperCluster
+</span><span style="color:#e6db74">metadata:
+</span><span style="color:#e6db74">  name: zookeepercluster
+</span><span style="color:#e6db74">  namespace: zookeeper
+</span><span style="color:#e6db74">spec:
+</span><span style="color:#e6db74">  replicas: 3
+</span><span style="color:#e6db74">EOF</span>
+</code></pre></div><h3 id="provision-banzai-kafka">Provision Banzai Kafka</h3>
+<p>Again there are lots of configurations details this guide does not cover. Please see the <a href="https://github.com/banzaicloud/kafka-operator">Banzai documentation</a> for more options.</p>
+<p>Components:</p>
+<ul>
+<li><strong>Kafka Operator</strong>: will maintain the lifecycle, data rebalancing and scaling for all the provisioned Kafkas in the cluster.</li>
+<li><strong>Kafka Instance</strong>: this guide provisions a simple kafka instance, configured for internal cluster access and initialized with some basic scaling/rebalancing rules.</li>
+</ul>
+<p><em>Kafka Operator</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># create the kafka namespace</span>
+kubectl create namespace kafka
+
+<span style="color:#75715e"># install kafka operator with prometheus alerts</span>
+helm upgrade --install <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --namespace kafka <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --values https://raw.githubusercontent.com/gabeduke/civo-kafka-example/v1.0.0/kafka-prometheus-alerts.yaml <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  kafka-operator banzaicloud-stable/kafka-operator
+</code></pre></div><p><em>Kafka</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># create the kafka cluster</span>
+KAFKA_INSTANCE<span style="color:#f92672">=</span>https://raw.githubusercontent.com/gabeduke/civo-kafka-example/v1.0.0/kafka.yaml
+curl $$KAFKA_INSTANCE | kubectl create -n kafka -f -
+
+<span style="color:#75715e"># create the service monitor</span>
+
+KAFKA_SERVICE_MONITOR<span style="color:#f92672">=</span>https://raw.githubusercontent.com/gabeduke/civo-kafka-example/v1.0.0/kafka-prometheus.yaml
+curl $KAFKA_SERVICE_MONITOR | kubectl create -n kafka -f -
+</code></pre></div><h3 id="validate">Validate</h3>
+<p>First we will validate the Cruise Control Dashboard is online and healthy. <a href="https://github.com/linkedin/cruise-control">Cruise Control</a> is a tool from LinkedIn which provides exceptional operational control over kafka clusters. The API can be triggered via Prometheus alerts, making Banzai clusters highly resilient. Go ahead and explore the configuration options.</p>
+<p><em>Cruise Control Dashboard</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># proxy to the cruise-control dashboard for kafka maintenance (may take a couple minutes)</span>
+kubectl port-forward -n kafka svc/kafka-cruisecontrol-svc 8090:8090 &amp;
+echo http://localhost:8090
+</code></pre></div><p>We can also validate that we can produce and consume from this cluster. First we need to provision a topic to use (<em>note</em>: the cluster must be finished provisioning before the topic can be applied):</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># create a topic to which we can produce/consume</span>
+cat <span style="color:#e6db74">&lt;&lt;EOF | kubectl apply -f -
+</span><span style="color:#e6db74">
+</span><span style="color:#e6db74">apiVersion: kafka.banzaicloud.io/v1alpha1
+</span><span style="color:#e6db74">kind: KafkaTopic
+</span><span style="color:#e6db74">metadata:
+</span><span style="color:#e6db74">  name: civo-topic
+</span><span style="color:#e6db74">  namespace: kafka
+</span><span style="color:#e6db74">spec:
+</span><span style="color:#e6db74">  clusterRef:
+</span><span style="color:#e6db74">    name: kafka
+</span><span style="color:#e6db74">  name: civo-topic
+</span><span style="color:#e6db74">  partitions: 3
+</span><span style="color:#e6db74">  replicationFactor: 2
+</span><span style="color:#e6db74">  config:
+</span><span style="color:#e6db74">    &#34;retention.ms&#34;: &#34;604800000&#34;
+</span><span style="color:#e6db74">    &#34;cleanup.policy&#34;: &#34;delete&#34;
+</span><span style="color:#e6db74">EOF</span>
+</code></pre></div><p>Run the following two commands in separate terminals:</p>
+<p><em>Produce</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># run a producer in a pod</span>
+kubectl run kafka-producer <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  -n kafka -it --rm<span style="color:#f92672">=</span>true --restart<span style="color:#f92672">=</span>Never <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --image<span style="color:#f92672">=</span>wurstmeister/kafka:2.12-2.3.0 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    -- /opt/kafka/bin/kafka-console-producer.sh <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --broker-list kafka-headless:29092 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --topic civo-topic
+</code></pre></div><p><em>Consume</em>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># run a consumer in a pod</span>
+kubectl run kafka-consumer <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  -n kafka -it --rm<span style="color:#f92672">=</span>true --restart<span style="color:#f92672">=</span>Never <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --image<span style="color:#f92672">=</span>wurstmeister/kafka:2.12-2.3.0 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    -- /opt/kafka/bin/kafka-console-consumer.sh <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --bootstrap-server kafka-headless:29092 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --from-beginning <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --topic civo-topic
+</code></pre></div><h2 id="clean">Clean</h2>
+<p>Well that was fun. Go check out the Banzai docs and tune a cluster to your needs. Time to clean up!</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># kill any dangling proxies</span>
+killall kubectl
+
+<span style="color:#75715e"># clean up the kubernetes cluster</span>
+civo k8s delete kafka
+</code></pre></div>]]></content></item><item><title>IOT Fleet Metrics (Part1)</title><link>https://gabeduke.github.io/weblog/posts/2019/11/iot-fleet-metrics-part1/</link><pubDate>Tue, 19 Nov 2019 09:30:04 -0500</pubDate><guid>https://gabeduke.github.io/weblog/posts/2019/11/iot-fleet-metrics-part1/</guid><description>TL/DR This guide documents a simple Prometheus PushGateway setup on top of Civo's k3s offering. We will then push some data to the gateway and visualize it in Grafana.
 The end result for this project is an environmental monitoring system that gathers sensor data. I won't actually deploy the scrape jobs in this guide, but we will send a metric with curl and visualize it in each of the core components.</description><content type="html"><![CDATA[<h2 id="tldr">TL/DR</h2>
 <p>This guide documents a simple Prometheus PushGateway setup on top of <a href="https://www.civo.com/kube100">Civo's k3s</a> offering. We will then push some data to the gateway and visualize it in Grafana.</p>
 <p>The end result for this project is an environmental monitoring system that gathers sensor data. I won't actually deploy the scrape jobs in this guide, but we will send a metric with curl and visualize it in each of the core components. The subsequent blogs will document building a native kubernetes operator to manage the sensor inputs.</p>
