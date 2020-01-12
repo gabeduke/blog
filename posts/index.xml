@@ -62,20 +62,25 @@ cat <span style="color:#e6db74">&lt;&lt;EOF | kubectl apply --namespace zookeepe
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># create the kafka namespace</span>
 kubectl create namespace kafka
 
+<span style="color:#75715e"># get the values file configured for prometheus</span>
+TMP_FILE<span style="color:#f92672">=</span>/tmp/kafka-prometheus-alerts.yaml
+
+curl https://raw.githubusercontent.com/gabeduke/civo-kafka-example/v1.0.0/kafka-prometheus-alerts.yaml -o $TMP_FILE -s
+
 <span style="color:#75715e"># install kafka operator with prometheus alerts</span>
 helm upgrade --install <span style="color:#ae81ff">\
 </span><span style="color:#ae81ff"></span>  --namespace kafka <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>  --values https://raw.githubusercontent.com/gabeduke/civo-kafka-example/v1.0.0/kafka-prometheus-alerts.yaml <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --values $TMP_FILE <span style="color:#ae81ff">\
 </span><span style="color:#ae81ff"></span>  kafka-operator banzaicloud-stable/kafka-operator
 </code></pre></div><p><em>Kafka</em>:</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># create the kafka cluster</span>
 KAFKA_INSTANCE<span style="color:#f92672">=</span>https://raw.githubusercontent.com/gabeduke/civo-kafka-example/v1.0.0/kafka.yaml
-curl $$KAFKA_INSTANCE | kubectl create -n kafka -f -
+curl $KAFKA_INSTANCE | kubectl apply -n kafka -f -
 
 <span style="color:#75715e"># create the service monitor</span>
 
 KAFKA_SERVICE_MONITOR<span style="color:#f92672">=</span>https://raw.githubusercontent.com/gabeduke/civo-kafka-example/v1.0.0/kafka-prometheus.yaml
-curl $KAFKA_SERVICE_MONITOR | kubectl create -n kafka -f -
+curl $KAFKA_SERVICE_MONITOR | kubectl apply -n kafka -f -
 </code></pre></div><h3 id="validate">Validate</h3>
 <p>First we will validate the Cruise Control Dashboard is online and healthy. <a href="https://github.com/linkedin/cruise-control">Cruise Control</a> is a tool from LinkedIn which provides exceptional operational control over kafka clusters. The API can be triggered via Prometheus alerts, making Banzai clusters highly resilient. Go ahead and explore the configuration options.</p>
 <p><em>Cruise Control Dashboard</em>:</p>
