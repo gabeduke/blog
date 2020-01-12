@@ -22,6 +22,7 @@ civo k8s create \ --nodes 3 \ --save --switch --wait \ kafka Provision Dependenc
 <li><strong>Prometheus Operator</strong>: We only need the core bundle which will enable the use of <a href="https://github.com/coreos/prometheus-operator/blob/master/Documentation/user-guides/getting-started.md#related-resources">service monitors</a> and alerts. This is one of the key enablers that allows Banzai kafka clusters to recover and rebalance data.</li>
 <li><strong>Zookeeper</strong>: You can use any zookeeper endpoint but Banzai has packaged an operator for use. Zookeeper is the key value database which stores the kafka state.</li>
 </ul>
+<p><strong>Note</strong>: This tutorial should be fully recreatable from the clodeblocks. However, it may be helpful to wait until each workload finishes deploying before moving on to the next command. I recommend putting a watch on the cluster pods in a separate terminal <code>watch kubectl get pods --all-namespaces</code>.</p>
 <p>We'll also need the <em>Banzai Helm Repo</em>:</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">helm repo add banzaicloud-stable https://kubernetes-charts.banzaicloud.com/
 </code></pre></div><p><em>Cert-Manager</em>:</p>
