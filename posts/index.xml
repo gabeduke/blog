@@ -1,4 +1,175 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Weblog on Adventures in over-engineering</title><link>https://gabeduke.github.io/weblog/posts/</link><description>Recent content in Weblog on Adventures in over-engineering</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Thu, 09 Jan 2020 09:30:08 -0500</lastBuildDate><atom:link href="https://gabeduke.github.io/weblog/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>Banzai Kafka in Kubernetes</title><link>https://gabeduke.github.io/weblog/posts/2020/01/banzai-kafka-in-kubernetes/</link><pubDate>Thu, 09 Jan 2020 09:30:08 -0500</pubDate><guid>https://gabeduke.github.io/weblog/posts/2020/01/banzai-kafka-in-kubernetes/</guid><description>This example deploys a Kafka cluster using Banzai Cloud Kafka Operator. This guide is a condensed version of the official Banzai documentation, the idea being to quickly get up and running with Kafka.
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Weblog on Adventures in over-engineering</title><link>https://gabeduke.github.io/weblog/posts/</link><description>Recent content in Weblog on Adventures in over-engineering</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Thu, 27 Feb 2020 09:30:08 -0500</lastBuildDate><atom:link href="https://gabeduke.github.io/weblog/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>Faasd in LXC</title><link>https://gabeduke.github.io/weblog/posts/2020/02/faasd-in-lxc/</link><pubDate>Thu, 27 Feb 2020 09:30:08 -0500</pubDate><guid>https://gabeduke.github.io/weblog/posts/2020/02/faasd-in-lxc/</guid><description>TL/DR
+This post explores running faasd in LXC containers.
+As a consumer of Faasd on a linux workstation I was unhappy with the options to run inside of a VM or on an external host. Faasd Developers can benefit from a native runtime environment, as well as cheap/fast sandbox environments provided by LXC. OpenFaas function function developers can benefit from a tighter inner-loop that doesnt invole pushing docker images to a remote registry just to test their functions Introduction First lets discuss what exactly is faasd and what it can be used for.</description><content type="html"><![CDATA[<p><strong>TL/DR</strong></p>
+<p>This post explores running <a href="https://github.com/openfaas/faasd">faasd</a> in LXC containers.</p>
+<ul>
+<li>As a consumer of Faasd on a linux workstation I was unhappy with the options to run inside of a VM or on an external host.</li>
+<li>Faasd Developers can benefit from a native runtime environment, as well as cheap/fast sandbox environments provided by LXC.</li>
+<li>OpenFaas function function developers can benefit from a tighter inner-loop that doesnt invole pushing docker images to a remote registry just to test their functions</li>
+</ul>
+<h2 id="introduction">Introduction</h2>
+<p>First lets discuss what exactly is faasd and what it can be used for. Faasd is a provider implementation of OpenFaas run as a systemd daemon. There are a handful of providers that each plug into OpenFaas which enable it to run in different environments. For example there is a provider for docker, kubernetes and even an in-memory provider for an ephemeral experience. Faasd is really geared for low resource boards like Raspberry Pi, where the overhead of running a docker daemon is too high (faasd interfaces directly with containerd using runc). So what does this mean? Well faasd makes a nice controller-manager for very small containerized processes.</p>
+<p>At the time of this post, faasd runs purely as systemd processes, the components are:</p>
+<ul>
+<li>Faasd/faas-cli - systemd daemon and go CLI for managing functions of http</li>
+<li>Containerd/Runc - container runtime (all functions must be containerized)</li>
+<li>CNI - I havn't dug too deep here but I assume this is for creating and cleaning up IP addresses as all functions must be network callable</li>
+</ul>
+<h3 id="why-lxc">Why LXC?</h3>
+<p>Okay cool so it sounds like the functions are already in containers, why bring LXC into the mix? First let's take a look at how the components are deployed. The current set up is quite simple, just a few binaries and some systemd templates. These are all glued together in a simple <a href="https://cloudinit.readthedocs.io/en/latest/index.html">cloud-config</a>. This is awesome, basically our only requirement is a fresh linux OS that can execute the script.</p>
+<p>But what if we want to run faasd on an existing linux system? Of course the simplest option, we can run a Virtual Machine, but we will have to pay the penalty of virtualization.</p>
+<blockquote>
+<p><em>confession: I do not actually know the overhead of running a VM these days. It's probable the host would never know the diffence since I understand it is quite low.</em></p>
+</blockquote>
+<p>Another option would be to run the processes directly on the host. This gets super messy without config managment tools like ansible. Given the current deployment is a handful of bootstrap scripts it would be a total pain to track things down if something breaks or we need to upgrade.</p>
+<p>Which brings us to LXC. Linux Containers are simply namespaced filesystems running on top of a shared linux kernel. Some advantages to running faasd in LXC (beyond the above mentioned):</p>
+<ol>
+<li>We can easily spin up <code>n+</code> environments including different versions for testing</li>
+<li>Containers are <em>extremely</em> fast to boot once the initial file system is pulled down.</li>
+<li>When something breaks we can blow away the entire container with minimal risk to the host.</li>
+<li>LXC actually has a network daemon included (LXD) which makes managing containers over the wire very convenient. See <a href="#Next_steps">Next steps</a> for a thought experiment involving LXD.</li>
+</ol>
+<h2 id="demo">Demo</h2>
+<p>Okay enough yapping let's look at some code..</p>
+<h3 id="pre-requisites">Pre-requisites</h3>
+<p>You will need to <a href="https://linuxcontainers.org/lxd/getting-started-cli/">install LXD</a> and then run <code>lxd init</code> to set up the network and storage pool. I stuck with <code>dir</code> for the storage backend to keep things simple and <code>lxdbr0</code> for the network (bridge to the host).</p>
+<blockquote>
+<p><em>warning: don't use ZFS storage pool yet, containerd support is not quite there.</em></p>
+</blockquote>
+<h3 id="creating-a-container">Creating a Container</h3>
+<p>The basic steps are:</p>
+<ul>
+<li>
+<p>create a LXC profile with the faasd cloud-init script and <code>security.nesting</code> enabled (since we are using containerd inside of linux namespaces)</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">LXD_PROFILE<span style="color:#f92672">=</span>faasd
+LXD_USERDATA<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;/tmp/cloud-config.yml&#34;</span>
+
+wget -qO $LXD_USERDATA https://gist.githubusercontent.com/gabeduke/7ccb3f3147d79ac30e2187432808060c/raw/4028ea0658e9aa0a37f6ac44473a8092e3824406/cloud-init.yml
+lxc profile set $LXD_PROFILE user.user-data - &lt; $LXD_USERDATA
+lxc profile set $LXD_PROFILE security.nesting<span style="color:#f92672">=</span>true
+
+lxc launch ubuntu:18.04 faasd -p $LXD_PROFILE
+
+</code></pre></div></li>
+<li>
+<p>Once the container is finished bootstrapping we can fetch the faasd password and connect to the OPENFAAS_GATEWAY over the network</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">FAASD_PASSWORD<span style="color:#f92672">=</span><span style="color:#66d9ef">$(</span>lxc exec faasd -- cat /var/lib/faasd/secrets/basic-auth-password<span style="color:#66d9ef">)</span>
+FAASD_IP<span style="color:#f92672">=</span><span style="color:#66d9ef">$(</span>lxc exec faasd -- /sbin/ip -o -4 addr list eth0 | awk <span style="color:#e6db74">&#39;{print $4}&#39;</span> | cut -d/ -f1<span style="color:#66d9ef">)</span>
+
+echo $FAASD_PASSWORD | faas-cli login --password-stdin --gateway http://<span style="color:#e6db74">${</span>FAASD_IP<span style="color:#e6db74">}</span>:8080
+
+</code></pre></div></li>
+<li>
+<p>There should now be a container running:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">» lxc list
++-------+---------+-----------------------+----------------------------------------------+-----------+-----------+
+| NAME  |  STATE  |         IPV4          |                     IPV6                     |   TYPE    | SNAPSHOTS |
++-------+---------+-----------------------+----------------------------------------------+-----------+-----------+
+| faasd | RUNNING | 10.62.0.1 <span style="color:#f92672">(</span>openfaas0<span style="color:#f92672">)</span> | fd42:ad54:4bbd:9f9:216:3eff:fe50:66ee <span style="color:#f92672">(</span>eth0<span style="color:#f92672">)</span> | CONTAINER | <span style="color:#ae81ff">0</span>         |
+|       |         | 10.225.76.18 <span style="color:#f92672">(</span>eth0<span style="color:#f92672">)</span>   |                                              |           |           |
++-------+---------+-----------------------+----------------------------------------------+-----------+-----------+
+
+</code></pre></div></li>
+<li>
+<p>And OpenFaas should be addressable on the gateway IP:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">» faas store deploy figlet
+WARNING! Communication is not secure, please consider using HTTPS. Letsencrypt.org offers free SSL/TLS certificates.
+
+Deployed. <span style="color:#ae81ff">200</span> OK.
+URL: http://faasd.local:8080/function/figlet
+
+» faas list
+Function                      	Invocations    	Replicas
+figlet                        	<span style="color:#ae81ff">0</span>              	<span style="color:#ae81ff">1</span>    
+
+
+</code></pre></div></li>
+</ul>
+<hr>
+<p>Here is the full convenience script (I am using <a href="https://github.com/cbednarski/hostess">hostess</a> to update <code>/etc/hosts</code> with the new gateway IP):</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e">#!/bin/bash 
+</span><span style="color:#75715e"></span>
+<span style="color:#75715e"># Set up the environment</span>
+export OPENFAAS_URL<span style="color:#f92672">=</span>http://faasd.local:8080
+
+LXD_PROFILE<span style="color:#f92672">=</span><span style="color:#e6db74">${</span>1<span style="color:#66d9ef">:-</span>dukemon<span style="color:#e6db74">}</span>
+LXD_USERDATA<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;/tmp/cloud-config.yml&#34;</span>
+LXD_CONTAINER<span style="color:#f92672">=</span><span style="color:#e6db74">${</span>2<span style="color:#66d9ef">:-</span>faasd<span style="color:#e6db74">}</span>
+
+<span style="color:#66d9ef">if</span> ! <span style="color:#f92672">(</span>lxc info $LXD_CONTAINER &gt; /dev/null 2&gt;&amp;1<span style="color:#f92672">)</span>
+<span style="color:#66d9ef">then</span>
+	echo <span style="color:#e6db74">&#34;ensure lxc profile&#34;</span>
+	wget -qO $LXD_USERDATA https://gist.githubusercontent.com/gabeduke/7ccb3f3147d79ac30e2187432808060c/raw/4028ea0658e9aa0a37f6ac44473a8092e3824406/cloud-init.yml
+	lxc profile set $LXD_PROFILE user.user-data - &lt; $LXD_USERDATA
+	lxc profile set $LXD_PROFILE security.nesting<span style="color:#f92672">=</span>true
+
+	echo <span style="color:#e6db74">&#34;</span><span style="color:#e6db74">launching LXC container </span><span style="color:#e6db74">${</span>LXD_CONTAINER<span style="color:#e6db74">}</span><span style="color:#e6db74">..</span><span style="color:#e6db74">&#34;</span>
+	lxc launch ubuntu:18.04 $LXD_CONTAINER -p $LXD_PROFILE
+<span style="color:#66d9ef">fi</span>
+
+<span style="color:#75715e"># Wait for cloud-init sequence to finish before moving on to the configuration steps</span>
+<span style="color:#66d9ef">until</span> <span style="color:#f92672">(</span>lxc exec $LXD_CONTAINER -- cat /var/lib/cloud/instance/boot-finished &gt; /dev/null 2&gt;&amp;1<span style="color:#f92672">)</span>
+<span style="color:#66d9ef">do</span>
+	echo <span style="color:#e6db74">&#34;Waiting for cloud-init complete signal..&#34;</span>
+	sleep <span style="color:#ae81ff">5</span>
+<span style="color:#66d9ef">done</span>
+
+<span style="color:#75715e"># let&#39;s be safe and wait for the last thread to finish</span>
+wait
+
+echo <span style="color:#e6db74">&#34;</span><span style="color:#e6db74">fetch faasd password from </span>$LXD_CONTAINER<span style="color:#e6db74">&#34;</span>
+FAASD_PASSWORD<span style="color:#f92672">=</span><span style="color:#66d9ef">$(</span>lxc exec $LXD_CONTAINER -- cat /var/lib/faasd/secrets/basic-auth-password<span style="color:#66d9ef">)</span>
+
+FAASD_IP<span style="color:#f92672">=</span><span style="color:#66d9ef">$(</span>lxc exec $LXD_CONTAINER -- /sbin/ip -o -4 addr list eth0 | awk <span style="color:#e6db74">&#39;{print $4}&#39;</span> | cut -d/ -f1<span style="color:#66d9ef">)</span>
+echo <span style="color:#e6db74">&#34;</span><span style="color:#e6db74">faasd IP is </span>$FAASD_IP<span style="color:#e6db74">&#34;</span>
+
+<span style="color:#66d9ef">if</span> which hostess
+<span style="color:#66d9ef">then</span>
+	echo <span style="color:#e6db74">&#34;Updating /etc/hosts&#34;</span>
+	sudo hostess add <span style="color:#e6db74">&#34;faasd.local&#34;</span> $FAASD_IP
+
+	wait
+
+	<span style="color:#66d9ef">until</span> <span style="color:#f92672">(</span>echo $FAASD_PASSWORD | faas-cli login --password-stdin &gt; /dev/null 2&gt;&amp;<span style="color:#ae81ff">1</span> <span style="color:#f92672">&amp;&amp;</span> echo <span style="color:#e6db74">&#34;login successful&#34;</span><span style="color:#f92672">)</span>
+	<span style="color:#66d9ef">do</span>
+		echo <span style="color:#e6db74">&#34;Attempt faasd login..&#34;</span>
+		sleep <span style="color:#ae81ff">5</span>
+	<span style="color:#66d9ef">done</span>
+<span style="color:#66d9ef">else</span>
+       	echo <span style="color:#e6db74">&#34;install hostess to /usr/local/bin to automatically update /etc/hosts (https://github.com/cbednarski/hostess)&#34;</span>
+<span style="color:#66d9ef">fi</span>
+
+echo <span style="color:#e6db74">&#34;init complete!&#34;</span>
+
+</code></pre></div><h3 id="hot-loading-images">Hot loading images</h3>
+<p>This is great we now have a container running with all of the faasd components and can easily add copies or swap out a new version. There is one last issue which is shortening the development loop for buildling functions. Containerd does not re-pull an image so once we publish a tag we cannot update it. It is common in development cycles to use a tag like <code>latest</code> to keep publishing images to. But we are running the containerd socket locally so why would we even want to push to a remote registry just to pull the same image back down to a different location on our machine? We can do better..</p>
+<p>Let's go over the steps to hot load images directly into containerd:</p>
+<ul>
+<li>
+<p>When developing OpenFaas functions we can just build the images locally and save them to OCI compatiable images using docker</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">faas build -f fn.yml
+docker save <span style="color:#f92672">[</span>registry<span style="color:#f92672">]</span>/<span style="color:#f92672">[</span>image<span style="color:#f92672">]</span>:<span style="color:#f92672">[</span>tag<span style="color:#f92672">]</span> -o fn.tar
+
+</code></pre></div></li>
+<li>
+<p>Now we can push the tarball into the LXC container and import it to the correct namespace:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">lxc file push fn.tar faasd/
+lxc exec faasd -- ctr -n openfaas-fn images import /fn.tar
+  
+</code></pre></div></li>
+<li>
+<p>Now we can simply run <code>faas deploy</code> to restart the container with the updated image.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">faasd deploy
+
+</code></pre></div></li>
+</ul>
+<h2 id="next-steps">Next steps</h2>
+<p>I had a lot of fun playing around with and containerizing Faasd, on a closing note here are some more things to try:</p>
+<ul>
+<li>Use LXD to create an autoscaling group of containers (need to ship container metrics and scale on capacity events)</li>
+<li>Use <code>distrobuilder</code> to pack a sharable image for more of a docker or ISO like experience.</li>
+</ul>
+]]></content></item><item><title>Banzai Kafka in Kubernetes</title><link>https://gabeduke.github.io/weblog/posts/2020/01/banzai-kafka-in-kubernetes/</link><pubDate>Thu, 09 Jan 2020 09:30:08 -0500</pubDate><guid>https://gabeduke.github.io/weblog/posts/2020/01/banzai-kafka-in-kubernetes/</guid><description>This example deploys a Kafka cluster using Banzai Cloud Kafka Operator. This guide is a condensed version of the official Banzai documentation, the idea being to quickly get up and running with Kafka.
 Setup Prerequisites:
 Civo CLI (Not strictly necessary but it is FAST) Helm3 Kubectl Provision Kubernetes Any kubernetes cluster will do but for this tutorial I'll use Civo Cloud's offering.
 civo k8s create \ --nodes 3 \ --save --switch --wait \ kafka Provision Dependencies Let's get the core dependencies provisioned.</description><content type="html"><![CDATA[<p>This example deploys a Kafka cluster using <a href="https://github.com/banzaicloud/kafka-operator">Banzai Cloud Kafka Operator</a>. This guide is a condensed version of the official Banzai documentation, the idea being to quickly get up and running with Kafka.</p>
